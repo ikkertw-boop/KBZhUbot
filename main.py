@@ -4,32 +4,44 @@ from flask import Flask, request, abort
 from telebot import TeleBot, types
 import google.generativeai as genai
 
+# Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+# Твой адрес на Render
 RENDER_EXTERNAL_URL = "https://kbzhubot.onrender.com"
 
 bot = TeleBot(TELEGRAM_TOKEN, threaded=False)
 genai.configure(api_key=GEMINI_API_KEY)
 
-# Настройка модели
-SYSTEM_INSTRUCTION = "Ты — персональный ИИ-ассистент по фитнесу... (сократил для краткости, оставь свою версию)"
-model = genai.GenerativeModel(model_name="gemini-1.5-flash", system_instruction=SYSTEM_INSTRUCTION)
+# Настройка модели Gemini
+SYSTEM_INSTRUCTION = (
+    "Ты — персональный ИИ-ассистент по фитнесу и нутрициологии для мужчины 43 лет. "
+    "Его параметры: вес 92 кг, рост 187 см. Цель: эстетика, КБЖУ 180/210/80. "
+    "Отвечай коротко и по делу."
+)
 
-history_storage = {}
+model = genai.GenerativeModel(
+    model_name="gemini-1.5-flash",
+    system_instruction=SYSTEM_INSTRUCTION
+)
 
 app = Flask(__name__)
 
-# СРАЗУ ПРИ ЗАПУСКЕ СТАВИМ ВЕБХУК
-webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
-bot.remove_webhook()
-bot.set_webhook(url=webhook_url)
-logging.info(f"ВЕБХУК УСТАНОВЛЕН ПРИ СТАРТЕ: {webhook_url}")
+# Функция установки вебхука
+def set_webhook():
+    webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
+    bot.remove_webhook()
+    bot.set_webhook(url=webhook_url)
+    logging.info(f"ВЕБХУК УСТАНОВЛЕН: {webhook_url}")
+
+# Ставим вебхук сразу при импорте/запуске файла
+set_webhook()
 
 @app.route('/')
 def home():
-    return "Бот работает!"
+    return "Бот активен"
 
 @app.route(f'/{TELEGRAM_TOKEN}', methods=['POST'])
 def webhook():
@@ -43,15 +55,16 @@ def webhook():
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "Привет! Я готов.")
+    bot.reply_to(message, "Привет! Присылай фото еды или задавай вопрос по тренировкам.")
 
 @bot.message_handler(content_types=['text', 'photo'])
-def handle_user_content(message):
+def handle_message(message):
     try:
         if message.content_type == 'photo':
             file_info = bot.get_file(message.photo[-1].file_id)
             downloaded_file = bot.download_file(file_info.file_path)
-            response = model.generate_content([{"mime_type": "image/jpeg", "data": downloaded_file}, "Что тут?"])
+            contents = [{"mime_type": "image/jpeg", "data": downloaded_file}, "Проанализируй КБЖУ этого блюда."]
+            response = model.generate_content(contents)
             bot.reply_to(message, response.text)
         else:
             response = model.generate_content(message.text)
@@ -60,6 +73,7 @@ def handle_user_content(message):
         logging.error(f"Ошибка: {e}")
 
 if __name__ == "__main__":
+    # Для локального запуска
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
     
