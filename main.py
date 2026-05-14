@@ -8,8 +8,6 @@ logging.basicConfig(level=logging.INFO)
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-
-# Прописываем твой URL напрямую, чтобы не зависеть от настроек Render
 RENDER_EXTERNAL_URL = "https://kbzhubot.onrender.com"
 
 bot = TeleBot(TELEGRAM_TOKEN, threaded=False)
@@ -39,48 +37,20 @@ def get_history(chat_id):
         history_storage[chat_id] = []
     return history_storage[chat_id]
 
-@bot.message_handler(commands=['start', 'help'])
-def send_welcome(message):
-    history_storage[message.chat.id] = []
-    bot.reply_to(message, "Привет! Твой персональный фитнес-помощник на связи. Задавай вопрос или скидывай фото еды.")
+# Устанавливаем webhook сразу при старте
+def set_webhook():
+    webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
+    bot.remove_webhook()
+    bot.set_webhook(url=webhook_url)
+    logging.info(f"ВЕБХУК УСТАНОВЛЕН: {webhook_url}")
 
-@bot.message_handler(content_types=['text', 'photo'])
-def handle_user_content(message):
-    chat_id = message.chat.id
-    history = get_history(chat_id)
-    
-    try:
-        if message.content_type == 'photo':
-            file_info = bot.get_file(message.photo[-1].file_id)
-            downloaded_file = bot.download_file(file_info.file_path)
-            
-            caption = message.caption if message.caption else "Что на этом фото и каков примерный состав КБЖУ?"
-            
-            contents = [
-                {"mime_type": "image/jpeg", "data": downloaded_file},
-                caption
-            ]
-            
-            response = model.generate_content(contents)
-            bot.reply_to(message, response.text)
-            return
+set_webhook()
 
-        if message.text:
-            logging.info(f"Получено сообщение от Telegram: {message.text}")
-            history.append({"role": "user", "parts": [message.text]})
-            response = model.generate_content(history)
-            history.append({"role": "model", "parts": [response.text]})
-            bot.reply_to(message, response.text)
-
-    except Exception as e:
-        logging.error(f"Ошибка при обработке: {e}")
-        bot.reply_to(message, "Произошла ошибка при анализе. Попробуй еще раз.")
-
-app = Flask('')
+app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Бот работает на вебхуках!"
+    return "Бот работает!"
 
 @app.route(f'/{TELEGRAM_TOKEN}', methods=['POST'])
 def webhook():
@@ -92,13 +62,36 @@ def webhook():
     else:
         abort(403)
 
-if __name__ == "__main__":
-    bot.remove_webhook()
-    
-    webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
-    bot.set_webhook(url=webhook_url)
-    logging.info(f"ВЕБХУК УСТАНОВЛЕН НА: {webhook_url}")
+@bot.message_handler(commands=['start', 'help'])
+def send_welcome(message):
+    history_storage[message.chat.id] = []
+    bot.reply_to(message, "Привет! Твой персональный фитнес-помощник на связи. Задавай вопрос или скидывай фото еды.")
 
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
-    
+@bot.message_handler(content_types=['text', 'photo'])
+def handle_user_content(message):
+    chat_id = message.chat.id
+    history = get_history(chat_id)
+
+    try:
+        if message.content_type == 'photo':
+            file_info = bot.get_file(message.photo[-1].file_id)
+            downloaded_file = bot.download_file(file_info.file_path)
+            caption = message.caption if message.caption else "Что на этом фото и каков примерный состав КБЖУ?"
+            contents = [
+                {"mime_type": "image/jpeg", "data": downloaded_file},
+                caption
+            ]
+            response = model.generate_content(contents)
+            bot.reply_to(message, response.text)
+            return
+
+        if message.text:
+            logging.info(f"Сообщение: {message.text}")
+            history.append({"role": "user", "parts": [message.text]})
+            response = model.generate_content(history)
+            history.append({"role": "model", "parts": [response.text]})
+            bot.reply_to(message, response.text)
+
+    except Exception as e:
+        logging.error(f"Ошибка: {e}")
+        bot.reply_to(message, "Ошибка. Попробуй ещё раз.")
