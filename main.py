@@ -37,7 +37,6 @@ def get_history(chat_id):
         history_storage[chat_id] = []
     return history_storage[chat_id]
 
-# Устанавливаем webhook сразу при старте
 def set_webhook():
     webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
     bot.remove_webhook()
@@ -95,3 +94,7 @@ def handle_user_content(message):
     except Exception as e:
         logging.error(f"Ошибка: {e}")
         bot.reply_to(message, "Ошибка. Попробуй ещё раз.")
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
