@@ -43,7 +43,7 @@ SYSTEM_INSTRUCTION = """
 """
 
 model = genai.GenerativeModel(
-    model_name="gemini-2.0-flash",
+    model_name="gemini-1.5-flash", # Исправлено на 1.5 для бесплатного лимита
     system_instruction=SYSTEM_INSTRUCTION
 )
 
@@ -53,7 +53,9 @@ app = Flask(__name__)
 # ---------------- WEBHOOK ----------------
 def init_webhook():
     try:
-        webhook_url = f"{RENDER_EXTERNAL_URL}/{TELEGRAM_TOKEN}"
+        # Убираем слэш в конце ссылки, если он случайно есть в RENDER_EXTERNAL_URL
+        base_url = RENDER_EXTERNAL_URL.rstrip('/') if RENDER_EXTERNAL_URL else ""
+        webhook_url = f"{base_url}/{TELEGRAM_TOKEN}"
 
         bot.remove_webhook()
         bot.set_webhook(url=webhook_url)
@@ -73,15 +75,10 @@ def home():
 @app.route(f"/{TELEGRAM_TOKEN}", methods=["POST"])
 def webhook():
     if request.headers.get("content-type") == "application/json":
-
         json_string = request.get_data().decode("utf-8")
-
         update = types.Update.de_json(json_string)
-
         bot.process_new_updates([update])
-
         return "", 200
-
     abort(403)
 
 # ---------------- COMMANDS ----------------
@@ -95,24 +92,20 @@ def start(message):
 # ---------------- TEXT + PHOTO ----------------
 @bot.message_handler(content_types=["text", "photo"])
 def handle_message(message):
-
     try:
-
         # ---------- PHOTO ----------
         if message.content_type == "photo":
-
             wait_msg = bot.reply_to(message, "Анализирую фото...")
-
+            
             file_info = bot.get_file(message.photo[-1].file_id)
-
             downloaded_file = bot.download_file(file_info.file_path)
-
+            
             prompt = (
                 message.caption
                 if message.caption
                 else "Оцени блюдо и примерно посчитай КБЖУ."
             )
-
+            
             response = model.generate_content(
                 [
                     prompt,
@@ -122,22 +115,17 @@ def handle_message(message):
                     }
                 ]
             )
-
+            
             bot.delete_message(message.chat.id, wait_msg.message_id)
-
             bot.reply_to(message, response.text)
 
         # ---------- TEXT ----------
         elif message.content_type == "text":
-
             response = model.generate_content(message.text)
-
             bot.reply_to(message, response.text)
 
     except Exception as e:
-
         logging.error(f"ERROR: {e}")
-
         bot.reply_to(
             message,
             "Ошибка обработки. Попробуй ещё раз."
@@ -145,10 +133,6 @@ def handle_message(message):
 
 # ---------------- START ----------------
 if __name__ == "__main__":
-
     port = int(os.environ.get("PORT", 10000))
-
-    app.run(
-        host="0.0.0.0",
-        port=port
-    )
+    app.run(host="0.0.0.0", port=port)
+    
