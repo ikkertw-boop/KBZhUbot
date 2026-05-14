@@ -1,16 +1,17 @@
 import os
 import logging
-from threading import Thread
-from flask import Flask
-from telebot import TeleBot
+from flask import Flask, request, abort
+from telebot import TeleBot, types
 import google.generativeai as genai
 
 logging.basicConfig(level=logging.INFO)
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+# Render автоматически создает эту переменную с адресом твоего сервиса (например, https://kbzhubot.onrender.com)
+RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
 
-bot = TeleBot(TELEGRAM_TOKEN)
+bot = TeleBot(TELEGRAM_TOKEN, threaded=False)
 genai.configure(api_key=GEMINI_API_KEY)
 
 SYSTEM_INSTRUCTION = (
@@ -73,27 +74,34 @@ def handle_user_content(message):
         logging.error(f"Ошибка при обработке: {e}")
         bot.reply_to(message, "Произошла ошибка при анализе. Попробуй еще раз.")
 
-# --- Костыль для Render, чтобы он видел открытый порт ---
+# --- Настройка вебхука через Flask ---
 app = Flask('')
 
 @app.route('/')
 def home():
-    return "Бот работает!"
+    return "Бот работает на вебхуках!"
 
-def run_flask():
-    # По умолчанию Render передает порт в переменную среды PORT
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host='0.0.0.0', port=port)
-
-def run_bot():
-    logging.info("Бот запущен...")
-    bot.infinity_polling()
+@app.route(f'/{TELEGRAM_TOKEN}', methods=['POST'])
+def webhook():
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        update = types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return ''
+    else:
+        abort(403)
 
 if __name__ == "__main__":
-    # Запуск Flask-сервера в отдельном потоке
-    t = Thread(target=run_flask)
-    t.start()
+    # Удаляем старый вебхук и ставим новый на адрес Render
+    bot.remove_webhook()
     
-    # Запуск Telegram-бота в основном потоке
-    run_bot()
+    if RENDER_EXTERNAL_URL:
+        webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
+        bot.set_webhook(url=webhook_url)
+        logging.info(f"Вебхук успешно установлен на: {webhook_url}")
+    else:
+        logging.warning("Переменная RENDER_EXTERNAL_URL не найдена. Вебхук не установлен.")
+
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
     
