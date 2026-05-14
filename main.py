@@ -37,15 +37,16 @@ def get_history(chat_id):
         history_storage[chat_id] = []
     return history_storage[chat_id]
 
-def set_webhook():
-    webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
-    bot.remove_webhook()
-    bot.set_webhook(url=webhook_url)
-    logging.info(f"ВЕБХУК УСТАНОВЛЕН: {webhook_url}")
-
-set_webhook()
-
 app = Flask(__name__)
+
+@app.before_request
+def setup_webhook_once():
+    if not hasattr(app, '_webhook_set'):
+        app._webhook_set = True
+        webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
+        bot.remove_webhook()
+        bot.set_webhook(url=webhook_url)
+        logging.info(f"ВЕБХУК УСТАНОВЛЕН: {webhook_url}")
 
 @app.route('/')
 def home():
