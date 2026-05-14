@@ -8,8 +8,9 @@ logging.basicConfig(level=logging.INFO)
 
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-# Render автоматически создает эту переменную с адресом твоего сервиса (например, https://kbzhubot.onrender.com)
-RENDER_EXTERNAL_URL = os.environ.get("RENDER_EXTERNAL_URL")
+
+# Прописываем твой URL напрямую, чтобы не зависеть от настроек Render
+RENDER_EXTERNAL_URL = "https://kbzhubot.onrender.com"
 
 bot = TeleBot(TELEGRAM_TOKEN, threaded=False)
 genai.configure(api_key=GEMINI_API_KEY)
@@ -65,6 +66,7 @@ def handle_user_content(message):
             return
 
         if message.text:
+            logging.info(f"Получено сообщение от Telegram: {message.text}")
             history.append({"role": "user", "parts": [message.text]})
             response = model.generate_content(history)
             history.append({"role": "model", "parts": [response.text]})
@@ -74,7 +76,6 @@ def handle_user_content(message):
         logging.error(f"Ошибка при обработке: {e}")
         bot.reply_to(message, "Произошла ошибка при анализе. Попробуй еще раз.")
 
-# --- Настройка вебхука через Flask ---
 app = Flask('')
 
 @app.route('/')
@@ -92,15 +93,11 @@ def webhook():
         abort(403)
 
 if __name__ == "__main__":
-    # Удаляем старый вебхук и ставим новый на адрес Render
     bot.remove_webhook()
     
-    if RENDER_EXTERNAL_URL:
-        webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
-        bot.set_webhook(url=webhook_url)
-        logging.info(f"Вебхук успешно установлен на: {webhook_url}")
-    else:
-        logging.warning("Переменная RENDER_EXTERNAL_URL не найдена. Вебхук не установлен.")
+    webhook_url = f"{RENDER_EXTERNAL_URL.rstrip('/')}/{TELEGRAM_TOKEN}"
+    bot.set_webhook(url=webhook_url)
+    logging.info(f"ВЕБХУК УСТАНОВЛЕН НА: {webhook_url}")
 
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
