@@ -1,4 +1,4 @@
-Flask==3.0.3
-pyTelegramBotAPI==4.18.1
-google-generativeai==0.8.5
-gunicorn==22.0.0
+flask
+pyTelegramBotAPI
+google-generativeai>=0.8.3
+gunicorn
