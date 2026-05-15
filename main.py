@@ -23,7 +23,7 @@ SYSTEM_INSTRUCTION = """
 
 # ИСПРАВЛЕНИЕ: Используем версию, к которой привязан твой ключ
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
+    model_name="gemini-1.5-pro",
     system_instruction=SYSTEM_INSTRUCTION
 )
 
