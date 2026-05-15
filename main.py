@@ -29,7 +29,7 @@ SYSTEM_INSTRUCTION = """
 
 # Используем полный путь к модели, чтобы избежать ошибки 404 (v1beta)
 model = genai.GenerativeModel(
-    model_name="models/gemini-2.0-flash",
+    model_name="gemini-1.5-flash-latest",
     system_instruction=SYSTEM_INSTRUCTION
 )
 
